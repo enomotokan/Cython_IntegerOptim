@@ -23,7 +23,13 @@ $$
 
 
 
-では、使い方を以下に説明していきます。まず、githubからoptimizerとgraverという二つの名前のファイルを`git clone`で適当なディレクトリにダウンロードしてください。さらに、本パッケージは内部でnumpyに依存しているので、あらかじめ`pip install numpy`としてnumpyをダウンロードしておきます。
+では、使い方を以下に説明していきます。まず、githubからoptimizerとgraverという二つの名前のファイルを`git clone`で適当なディレクトリにダウンロードしてください。さらに、本パッケージは内部でnumpy及びcythonに依存しているので、あらかじめ
+
+`pip install numpy`
+
+`pip install cython`
+
+としてnumpy、cythonをダウンロードしておきます。
 
 
 
@@ -121,6 +127,8 @@ $$
 
   `Solver.verbose = True`
 
+
+
   `Solver.add_variable("x", 3, 5)`
 
   `Solver.add_variable("y", 1, 4)`
@@ -129,11 +137,19 @@ $$
 
   `Solver.add_condition(">", 2)`
 
+
+
   `Solver.define_coefficient(0, "x", 2)`
 
   `Solver.define_coefficient(0, "y", -1)`
 
   `Solver.define_coefficient(0, "z", -2)`
+
+`# 制約条件とグレーバー基底を保存する`
+
+`Solver.config_graver()`
+
+
 
   `Solver.add_convexfunc("x", 3)`
 
