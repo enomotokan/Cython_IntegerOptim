@@ -62,7 +62,7 @@ class SCIOLIC():
 
         # 標準形のA,b
         self.A = 0
-        self.b = []
+        self.b = np.array([], dtype=np.int32)
 
     # 変数の追加
     def add_variable(self, var_name: str, lower_bound: int, upper_bound: int):
@@ -110,15 +110,15 @@ class SCIOLIC():
                 if inequality_sign in ["=", "<=", ">="]:
                     self.condition.append(inequality_sign)
                     self.coefficient.append({})
-                    self.b.append(constant)
+                    self.b = np.append(self.b, constant)
                 elif inequality_sign == "<":
                     self.condition.append("<=")
                     self.coefficient.append({})
-                    self.b.append(constant - 1)
+                    self.b = np.append(self.b, constant - 1)
                 else:
                     self.condition.append(">=")
                     self.coefficient.append({})
-                    self.b.append(constant + 1)
+                    self.b = np.append(self.b, constant + 1)
                     
 
     # 追加した条件式に対し係数を定義
@@ -133,23 +133,12 @@ class SCIOLIC():
             else:
                 self.coefficient[condition_num][variable_name] = coefficient
 
-    # 解を探索
-    def search(self):
-        if self.verbose:
-            print("Welcome to SCIOLIC, a solver for separatable convex integer optimization with linear integer condition")
-            print("Created by Enomoto Kan, Oita prefecture, Japan")
-            print("Contact: enomotokan@gmail.com\n")
-        if not 0 < self.alpha < 1:
-            print("Error: the value of alpha must be 0 < alpha < 1")
-            self.errored = True
+    # graver基底の構成
+    def config_graver(self):
+
         if self.errored:
             print("Error: definition of the problem has error.")
-        else:
-            # ログ出力を行う
-            if self.verbose:
-                
-                print("Starting to reserch a feasible solution...")
-                
+        else:               
 
             # 条件式の中で全ての係数が0であるものがないかどうか調べる
             for condition_num in range(len(self.condition)):
@@ -157,16 +146,10 @@ class SCIOLIC():
                     print("Error: All coefficient of each variable of condition " + str(condition_num) + " is 0")
                     self.errored = True
             
-            # if len(self.condition) == 0:
-
-
             # 入力した情報を標準形に変換
             self.A = np.zeros((len(self.condition), self.N_variable), dtype=np.int32)
-            self.b = np.array(self.b)
             self.max_array = np.array([])
-
             for n in range(len(self.condition)):
-
                 if self.condition[n] == ">=":
                     max_lefthand_n = max_lefthand(self.bound, self.b[n], self.coefficient[n], self.variable_n)
                     if max_lefthand_n < 0:
@@ -201,6 +184,197 @@ class SCIOLIC():
                     for variable_name in self.coefficient[n].keys():
                         self.A[n][self.variable_n[variable_name]] = self.coefficient[n][variable_name]
             self.bound = np.array(self.bound)
+            if self.verbose:
+                print("Configuring Graver basis...")
+            self.graver_A = graver(basis_intker(self.A))
+
+    # 制約条件とgraver基底を保存
+    def save_conditions(self, filename):
+        print(self.condition)
+        print(self.coefficient)
+        if type(filename) != str:
+            print("Error: type of filename must be str")
+        else:
+            if len(filename) == 0:
+                print("Error: length of filename must be larger than 1")
+            else:
+                f = open(filename + '.txt', 'w', encoding="UTF-8")
+                f.write(str(self.N_variable) + "\n")
+                f.write("\n")
+                f.write(str(len(self.condition)) + "\n")
+                f.write("\n")
+                for n_cond in range(len(self.condition)):
+                    f.write(self.condition[n_cond])
+                    f.write("\n")
+                    for n in range(self.N_variable):
+                        f.write(str(self.coefficient[n_cond][self.n_variable[n]]) + " ")
+                    f.write("\n")
+                    f.write(str(self.b[n_cond]))
+                    f.write("\n")
+                f.write("\n")
+                f.write(str(len(self.graver_A)))
+                f.write("\n")
+                for base in self.graver_A:
+                    for comp in base:
+                        f.write(str(comp) + " ")
+                    f.write("\n")
+                f.close()
+
+    # 制約条件とgraver基底を読み込み
+    def load_conditions(self, filename):
+        if type(filename) != str:
+            print("Error: type of filename must be str")
+        else:
+            if len(filename) == 0:
+                print("Error: length of filename must be larger than 1")
+            else:
+                try:
+                    f = open(filename + '.txt', 'r', encoding="UTF-8")
+                except:
+                    print("Error: No such file or directory")
+                    return
+                line = f.readline()
+                N_variable = line.split()
+                if len(N_variable) != 1:
+                    print("Error: syntax of line 0 is not correct")
+                    print(line)
+                    return
+                else:
+                    try:
+                        N_variable = int(N_variable[0])
+                    except:
+                        print("Error: syntax of line 0 is not correct")
+                        return
+                    if N_variable != self.N_variable:
+                        print("Error: Number of variables do not match")
+                        return
+                line = f.readline()    
+                line = f.readline()
+                N_condition = line.split()
+                if len(N_condition) != 1:
+                    print("Error: syntax of line 1 is not correct")
+                    return
+                else:
+                    try:
+                        N_condition = int(N_condition[0])
+                    except:
+                        print("Error: syntax of line 1 is not correct")
+                        return
+                line = f.readline()
+                for i in range(N_condition):
+                    line = f.readline().split()
+                    if len(line) != 1:
+                        print("Error: Syntax of condition" + str(i) + " not correct")
+                        return
+                    print(self.condition)
+                    if line[0] in [">=", "<=", "=", ">", "<"]:
+                        self.condition.append(line[0])
+                    line = f.readline().split()
+                    if len(line) != N_variable:
+                        print("Error: number of coefficients of condition " + str(i) + " do not match")
+                    try:
+                        self.coefficient.append({})
+                        for n in range(N_variable):
+                            self.coefficient[i][self.n_variable[n]] = int(line[n])
+                    except:
+                        print("Error: conversation of coefficient of condition " + str(i) + " row " + str(n) + " to int was failed")
+                        return
+                    line = f.readline().split()
+                    if len(line) != 1:
+                        print("Error: Syntax of condition " + str(i) + "b is not correct")
+                        return
+                    try:
+                        self.b = np.append(self.b, int(line[0]))
+                    except:
+                        print("Error: conversation of b[" + str(i) + " to int")
+                    print(self.condition)
+                    print(self.coefficient)
+                line = f.readline()
+                line = f.readline()
+                try:
+                    N = int(line)
+                except:
+                    print("Error: conversation of size of graver basis to int was failed")
+                    return
+                size_A_1 = N_variable + np.sum([self.condition != ["="]])
+                self.graver_A = np.zeros((N, size_A_1), dtype=np.int32)
+                for n in range(N):
+                    line = f.readline().split()
+                    if len(line) != size_A_1:
+                        print("Error: size of base" + str(i) + " of graver basis is not correct")
+                        return
+                    else:
+                        try:
+                            for j in range(size_A_1):
+                                self.graver_A[n , j] = int(line[j])
+                        except:
+                            print("Error: conversation of line " + str(n) + " row" + str(j) + "of graver basis to" + "int was failed")
+                f.close()
+
+                # 条件式の中で全ての係数が0であるものがないかどうか調べる
+                for condition_num in range(len(self.condition)):
+                    if self.condition[condition_num] == {}:
+                        print("Error: All coefficient of each variable of condition " + str(condition_num) + " is 0")
+                        self.errored = True
+                
+                # 入力した情報を標準形に変換
+                self.A = np.zeros((len(self.condition), self.N_variable), dtype=np.int32)
+                self.b = np.array(self.b)
+                self.max_array = np.array([], dtype=np.int32)
+                for n in range(len(self.condition)):
+                    if self.condition[n] == ">=":
+                        max_lefthand_n = max_lefthand(self.bound, self.b[n], self.coefficient[n], self.variable_n)
+                        if max_lefthand_n < 0:
+                            print("Error: condition " + str(n) +" cannot be satisfied")
+                            self.errored = True
+                        self.max_array = np.append(self.max_array, max_lefthand_n)
+                        self.bound.append([0, max_lefthand_n])
+                        for variable_name in self.coefficient[n].keys():
+                            self.A[n][self.variable_n[variable_name]] = self.coefficient[n][variable_name]
+                        self.A = np.append(self.A, np.array([np.zeros(len(self.condition))]).astype(np.int32).T, axis=1)
+                        self.A[n][-1] = -1
+
+                    elif self.condition[n] == "<=":
+                        min_lefthand_n = min_lefthand(self.bound, self.b[n], self.coefficient[n], self.variable_n)
+                        if min_lefthand_n > 0:
+                            print("Error: condition " + str(n) +" cannot be satisfied")
+                            self.errored = True
+                        self.max_array = np.append(self.max_array, - min_lefthand_n)
+                        self.bound.append([0, -min_lefthand_n])
+                        for variable_name in self.coefficient[n].keys():
+                            self.A[n][self.variable_n[variable_name]] = self.coefficient[n][variable_name]
+                        self.A = np.append(self.A, np.array([np.zeros(len(self.condition))]).astype(np.int32).T, axis=1)
+                        self.A[n][-1] = 1
+
+                    elif self.condition[n] == "=":
+                        max_lefthand_n = max_lefthand(self.bound, self.b[n], self.coefficient[n], self.variable_n)
+                        min_lefthand_n = min_lefthand(self.bound, self.b[n], self.coefficient[n], self.variable_n)
+                        if not max_lefthand_n >= 0 >= min_lefthand_n:
+                            print("Error: condition " + str(n) +" cannot be satisfied")
+                            self.errored = True
+                        self.max_array = np.append(self.max_array, np.max([max_lefthand_n, - min_lefthand_n]))
+                        for variable_name in self.coefficient[n].keys():
+                            self.A[n][self.variable_n[variable_name]] = self.coefficient[n][variable_name]
+                self.bound = np.array(self.bound)
+    
+    # 解を探索
+    def search(self):
+        if self.verbose:
+            print("Welcome to SCIOLIC, a solver for separatable convex integer optimization with linear integer condition")
+            print("Created by Enomoto Kan, Oita prefecture, Japan")
+            print("Contact: enomotokan@gmail.com\n")
+        if not 0 < self.alpha < 1:
+            print("Error: the value of alpha must be 0 < alpha < 1")
+            self.errored = True
+        if self.errored:
+            print("Error: definition of the problem has error.")
+        else:
+            # ログ出力を行う
+            if self.verbose:
+                
+                print("Starting to reserch a feasible solution...")
+            if self.verbose:
+                print("Optimizing the problem...")
 
             # 条件が充たされているか
             satisfied = True
@@ -208,7 +382,6 @@ class SCIOLIC():
             for i in range(self.N_search_feasible):
                 # 実行可能解を探索
                 var = search_feasible_solution(self.A, self.b, self.max_array, self.bound, self.N_variable)
-
                 for n in range(len(self.condition)):
                     lefthand = 0
                     for variable_name, coef in self.coefficient[n].items():
@@ -235,13 +408,6 @@ class SCIOLIC():
             
             if self.errored:
                 return None
-                
-
-            if self.verbose:
-                print("Configuring Graver basis...")
-            graver_A = graver(basis_intker(self.A))
-            if self.verbose:
-                print("Configuration was completed. Optimizing the problem...")
 
             # graver最良増加法
             self_convexfunc = {}
@@ -252,8 +418,6 @@ class SCIOLIC():
                     self_convexfunc[variable] = 0
             self.convexfunc = self_convexfunc
             
-            print(self.convexfunc)
-            print(self.convexfunc.values())
             equal_func = np.array([type(f) == types.FunctionType for f in list(self.convexfunc.values())])
 
             coef = np.array([])
@@ -265,8 +429,8 @@ class SCIOLIC():
                     convfunc.append(f)
 
             # graver 基底の、符号が逆の成分を除いておく
-            graver_A_ = np.empty((0, graver_A.shape[1]), dtype=np.int32)
-            for base in graver_A:
+            graver_A_ = np.empty((0, self.graver_A.shape[1]), dtype=np.int32)
+            for base in self.graver_A:
                 notin_graver_A_ = True
                 for base_ in graver_A_:
                     if np.all(base == -base_):
@@ -336,9 +500,7 @@ def df(coef, convfunc, var, equal_func, dvar):
     if not np.all(np.logical_not(equal_func)):
         for f, v, dv in convfunc, var[equal_func], dvar[equal_func]:
             df += f(v + dv) - f(v)
-    return df
-
-                
+    return df                
             
 # 自然数を0,1の結合で表すための結合ベクトルを生成する函数
 def n_alpha(n):
@@ -437,27 +599,23 @@ if __name__ == "__main__":
     Solver.add_variable("x4", 5, 7)
     Solver.add_variable("x5", -3, 4)
 
-    Solver.add_condition(">", 2)
-    Solver.define_coefficient(0, "x1", 5)
-    Solver.define_coefficient(0, "x2", -1)
-    Solver.define_coefficient(0, "x3", 3)
-    Solver.define_coefficient(0, "x4", 2)
-    Solver.define_coefficient(0, "x5", -4)
+    # Solver.add_condition(">", 2)
+    # Solver.define_coefficient(0, "x1", 5)
+    # Solver.define_coefficient(0, "x2", -1)
+    # Solver.define_coefficient(0, "x3", 3)
+    # Solver.define_coefficient(0, "x4", 2)
+    # Solver.define_coefficient(0, "x5", -4)
 
-    Solver.add_condition("<=", 2)
-    Solver.define_coefficient(0, "x1", 3)
-    Solver.define_coefficient(0, "x2", 4)
-    Solver.define_coefficient(0, "x3", -2)
-    Solver.define_coefficient(0, "x4", 1)  
-    Solver.define_coefficient(0, "x5", -3) 
 
+    # Solver.config_graver()
+    # Solver.save_conditions("prob1")
+    Solver.load_conditions("prob1")
 
     Solver.add_convexfunc("x2", 4)
     Solver.add_convexfunc("x1", 3)
     Solver.add_convexfunc("x3", 2)
     Solver.add_convexfunc("x4", -2)
     Solver.add_convexfunc("x5", -5)
-
     print(Solver.search())
 
     # print(Solver.A)

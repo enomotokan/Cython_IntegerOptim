@@ -1,5 +1,6 @@
 import numpy as np
 cimport numpy as cnp
+from libc.math cimport abs
 from time import time
 from cython cimport boundscheck, wraparound
 from cython.parallel cimport prange
@@ -137,6 +138,37 @@ cdef int binary_search(cnp.ndarray[cnp.npy_int32, ndim=1] norms, cnp.ndarray[cnp
         else:
             return binary_search(norms, np.array([range[0], central]), norm)
 
+# 符号
+cdef int sign(int a) nogil:
+    if a > 0:
+        return +1
+    elif a < 0:
+        return -1
+    else:
+        return 0
+
+# min函数
+cdef int min(int a, int b) nogil:
+    if a > b:
+        return b
+    else:
+        return a
+
+# return a - c * b
+cdef int[:] minus(int[:] a, int c, int[:] b) nogil:
+    cdef int n
+    for n in prange(len(a)):
+        a[n] -= c * b[n]
+    return a
+
+# 論理all
+cdef bint all(bint[:] bool_list) nogil:
+    cdef int n
+    for n in range(len(bool_list)):
+        if not bool_list[n]:
+            return False
+    return True
+
 # 標準形アルゴリズム
 cdef int[:] NFA(int[:] s, int[:, ::1] G):
     cdef:
@@ -150,16 +182,17 @@ cdef int[:] NFA(int[:] s, int[:, ::1] G):
             break
         notlarger = True
         for n in range(len(s)):
-            if np.sign(g[n]) * np.sign(s[n]) < 0 or np.abs(g[n]) > np.abs(s[n]):
+            if sign(g[n]) * sign(s[n]) < 0 or abs(g[n]) > abs(s[n]):
                 notlarger = False
                 break
         # if np.all(np.sign(g) * np.sign(s) >= 0):
         #     if np.all(np.abs(g) <= np.abs(s)):
         if notlarger:
-            coef = 2**20
-            for n in range(len(s)):
+            coef = 2147483647
+            for n in range(0, len(s)):
                 if g[n] != 0:
-                    coef = np.min([coef, <int>(s[n] / g[n])])
+                    coef = min(coef, <int>(s[n] / g[n]))
+            # s = minus(s, coef, g)
             for n in range(len(s)):
                 s[n] -= coef * g[n]
     return s
@@ -176,6 +209,7 @@ cdef cnp.ndarray[cnp.npy_int32, ndim=2] c_graver(cnp.ndarray[cnp.npy_int32, ndim
         float[:, ::1] M = basis.copy().astype(np.float32)
         int[:] linear_independent = np.array([], dtype=np.int32)
         int i, j, k, l
+        equal_0
 
     for i in range(M.shape[0]):
         equal_0 = np.abs(M[i]) <= 2**-15
@@ -314,11 +348,11 @@ cdef cnp.ndarray[cnp.npy_int32, ndim=2] c_graver(cnp.ndarray[cnp.npy_int32, ndim
     return G
 
 # if __name__ == "__main__":
-A = np.array([[2, -1, 0, -3, 2, -2], [1, 5, -4, 0, 0, 0]], dtype=np.int32)
-t = time()
-basis = basis_intker(A)
-print(basis)
-print(graver(basis))
-# print(len(proj_lift))
-t1 = time()
-print(t1 - t)
+# A = np.array([[2, -1, 0, -3, 2, -2], [1, 5, -4, 0, 0, 0]], dtype=np.int32)
+# t = time()
+# basis = basis_intker(A)
+# print(basis)
+# print(graver(basis))
+# # print(len(proj_lift))
+# t1 = time()
+# print(t1 - t)
